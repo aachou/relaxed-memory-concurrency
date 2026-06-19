@@ -1,8 +1,8 @@
 # Relaxed Memory Concurrency
 
-> 使用 [Loom](https://github.com/tokio-rs/loom) 对 **Promising Semantics** 建模的 relaxed behaviors & orderings 及三种锁实现进行测试。
+> 使用 [Loom](https://github.com/tokio-rs/loom) 对 **Promising Semantics** 建模的 Relaxed Behaviors & Orderings 及三种互斥锁进行测试。
 
-## 项目结构
+## Structure
 
 ```
 src/
@@ -19,9 +19,9 @@ tests/
 └── lock_tests.rs             # SpinLock / TicketLock / CLHLock
 ```
 
-## Promising Semantics 四机制测试
+## Relaxed Behaviors & Orderings Test
 
-### ① Multi-valued Memory — Load Hoisting
+### ① Multi-Valued Memory — Load Hoisting
 
 内存建模为 location → message list 的映射，线程可以读到旧值。
 
@@ -33,7 +33,7 @@ X = 1;   r1 = Y;     ||     Y = 1;   r2 = X;
 |------|------|------|
 | `test_load_hoisting` | Relaxed 下 load 可读到旧值 | `r1=r2=0` **可达**（witness 断言） |
 
-### ② Message Adjacency — RMW 原子性
+### ② Message Adjacency — RMW Atomicity
 
 RMW 操作的新 message 必须邻接到被读 message 的右侧，防止 RMW 读到旧值。
 
@@ -73,7 +73,7 @@ Store hoisting 的 LB 模式 (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 公
 | `test_store_hoisting_syntactic_dep` | 语法依赖 | 允许 | 不支持 | **可达** |
 | `test_store_hoisting_syntactic_dep_rw_coherence` | 语法依赖 + RW coherence | `r1=r2=1` 允许，`r3=0`（故三者同时为 1 不可达） | 不可达 | **不可达** |
 
-## 三种锁
+## Mutex Lock
 
 | 锁 | lock | unlock | 关键语义 |
 |----|------|--------|---------|
@@ -92,7 +92,7 @@ Store hoisting 的 LB 模式 (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 公
 | `clh_lock::mutual_exclusion` | 同上 |
 | `clh_lock::message_passing` | 同上 |
 
-## 运行
+## Run
 
 ```powershell
 cargo promises
@@ -100,9 +100,10 @@ cargo promises
 
 运行所有 20 个测试，Loom 会穷举所有线程交错，验证断言在所有调度下均成立。
 
-## 参考
+## Reference
 
 - [Promising Semantics](https://sf.snu.ac.kr/promise-concurrency/)
-- [Loom — tokio-rs/loom](https://github.com/tokio-rs/loom)
+- [Loom](https://github.com/tokio-rs/loom)
 - [KAIST CS431: Concurrent Programming](https://github.com/kaist-cp/cs431)
-- 详细文档见 [`relaxed memory concurrency.md`](./relaxed%20memory%20concurrency.md)
+
+完整文档：[Relaxed Memory Concurrency](./relaxed%20memory%20concurrency.md)
