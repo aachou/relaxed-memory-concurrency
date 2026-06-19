@@ -35,8 +35,7 @@ macro_rules! lock_tests {
                     let c1 = counter.clone();
                     let t1 = thread::spawn(move || {
                         let tok = l1.lock();
-                        let val = c1.load(Ordering::Relaxed);
-                        c1.store(val + 1, Ordering::Relaxed);
+                        c1.store(c1.load(Ordering::Relaxed) + 1, Ordering::Relaxed);
                         l1.unlock(tok);
                     });
 
@@ -44,8 +43,7 @@ macro_rules! lock_tests {
                     let c2 = counter.clone();
                     let t2 = thread::spawn(move || {
                         let tok = l2.lock();
-                        let val = c2.load(Ordering::Relaxed);
-                        c2.store(val + 1, Ordering::Relaxed);
+                        c2.store(c2.load(Ordering::Relaxed) + 1, Ordering::Relaxed);
                         l2.unlock(tok);
                     });
 

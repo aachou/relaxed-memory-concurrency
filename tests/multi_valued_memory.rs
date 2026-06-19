@@ -23,7 +23,7 @@ use loom::thread;
 /// 两个线程各写一个位置再读另一个位置。通过 witness 捕获目标状态：
 /// loom 探索所有调度后 witness 被设置，则证明该行为确实存在。
 #[test]
-fn store_buffering_reachable() {
+fn test_load_hoisting() {
     let reached = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let r = reached.clone();
 

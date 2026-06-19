@@ -1,12 +1,5 @@
-#[cfg(loom)]
 use loom::sync::atomic::{AtomicBool, Ordering};
-#[cfg(not(loom))]
-use std::sync::atomic::{AtomicBool, Ordering};
-
-#[cfg(loom)]
 use loom::hint::spin_loop;
-#[cfg(not(loom))]
-use std::hint::spin_loop;
 
 pub struct SpinLock {
     inner: AtomicBool,

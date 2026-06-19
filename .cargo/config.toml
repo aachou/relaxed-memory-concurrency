@@ -1,2 +1,2 @@
 [alias]
-loom = "test --features loom --tests -- --test-threads=1 --nocapture"
+promises = "test --tests -- --test-threads=1 --nocapture"

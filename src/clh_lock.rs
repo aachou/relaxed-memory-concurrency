@@ -1,12 +1,5 @@
-#[cfg(loom)]
 use loom::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
-#[cfg(not(loom))]
-use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering};
-
-#[cfg(loom)]
 use loom::hint::spin_loop;
-#[cfg(not(loom))]
-use std::hint::spin_loop;
 
 struct Node {
     locked: AtomicBool,

@@ -1,12 +1,5 @@
-#[cfg(loom)]
 use loom::sync::atomic::{AtomicUsize, Ordering};
-#[cfg(not(loom))]
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-#[cfg(loom)]
 use loom::hint::spin_loop;
-#[cfg(not(loom))]
-use std::hint::spin_loop;
 
 pub struct TicketLock {
     next: AtomicUsize,
