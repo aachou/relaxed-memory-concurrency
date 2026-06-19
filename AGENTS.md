@@ -7,7 +7,7 @@ cargo loom                          # alias: test --features loom --tests -- --t
 loom-test.bat                       # same as above
 ```
 
-All 21 tests pass. Running without `--features loom` compiles the lib (std atomics) but skips all tests.
+All 20 tests pass. Running without `--features loom` compiles the lib (std atomics) but skips all tests. Running without `--features loom` compiles the lib (std atomics) but skips all tests.
 
 ## Test quirk — `--test-threads=1` is required
 
@@ -36,10 +36,12 @@ CLH lock's `Drop` uses `swap(null)` instead of `get_mut()` because Loom's `Atomi
 
 | File | Tests | What it verifies |
 |------|-------|-----------------|
-| `multi_valued_memory.rs` | 2 | Load hoisting under `Relaxed` |
+| `multi_valued_memory.rs` | 1 | Load hoisting under `Relaxed` (witness-proven reachable) |
 | `message_adjacency.rs` | 2 | RMW adjacency (no double-zero, 3-thread chain) |
 | `views.rs` | 7 | RR/RW/WR/WW coherence + Release/Acquire + SC fence + relaxed control |
 | `promises.rs` | 4 | Store hoisting: w/o dep, OOTA, syntactic dep, RW-coherence block |
 | `lock_tests.rs` | 6 | SpinLock / TicketLock / CLHLock × (mutual_exclusion + message_passing) |
 
-Tests that assert a behaviour **is reachable** (wo-dep promises, store-buffering) use `let _v = ...` without assertion — Loom exploring all schedules without error is the verification.
+Tests that assert a behaviour **is reachable** (store-buffering) use a witness `std::sync::Arc<std::sync::atomic::AtomicBool>` outside `loom::model` to capture the target state, then assert it was reached.  Loom does not track std atomics, so the witness adds no branching overhead.
+
+Promises scenarios 1 and 3 (store hoisting w/o dep, syntactic dep) are **compiler optimizations** that Loom (C11-based) cannot model.  These tests run without outcome assertions — only verifying no UB or deadlock.

@@ -30,8 +30,9 @@ use loom::thread;
 /// Y = r1    ||    X = 1
 /// ```
 ///
-/// 执行顺序可以是：线程2 promise X=1 → 线程1 读 X=1 → 线程1 写 Y=1 → 线程2 读 Y=1
-/// → 结果 `r1 = 1, r2 = 1`
+/// 注意：Store hoisting 是编译器优化，Loom（基于 C11 内存模型）不建模。
+/// Loom 仅验证此代码不会出现数据竞争或死锁。`r1=1 && r2=1` 的理论可达性
+/// 依赖于 Promises 的 store hoisting 机制，不在 Loom 的能力范围内。
 #[test]
 fn store_hoist_wo_dep() {
     loom::model(|| {
@@ -61,8 +62,8 @@ fn store_hoist_wo_dep() {
         t1.join().unwrap();
         t2.join().unwrap();
 
-        // Store hoisting without dependency: r1=1 && r2=1 IS reachable.
-        // Thread 2 can hoist X=1 before actually executing r2=Y.
+        // Store hoisting is a compiler optimization not modelled by Loom.
+        // This test merely runs the pattern without asserting outcomes.
         let _v1 = r1.load(Ordering::Relaxed);
         let _v2 = r2.load(Ordering::Relaxed);
     });
@@ -134,7 +135,7 @@ fn store_hoist_w_dep_oota() {
 /// Y = r1    ||    if r2 == 1 { X = r2 } else { X = 1 }
 /// ```
 ///
-/// 无论走哪个分支，`X=1` 都成立，因此 hoist 是安全的。
+/// 同场景 ①，此编译器优化超出 Loom 的建模范围。Loom 仅确保无数据竞争。
 #[test]
 fn store_hoist_syntactic_dep() {
     loom::model(|| {
@@ -168,7 +169,7 @@ fn store_hoist_syntactic_dep() {
         t1.join().unwrap();
         t2.join().unwrap();
 
-        // Syntactic dependency: r1=1 && r2=1 IS reachable (compiler optimises to X=1).
+        // Same as scenario 1: store hoisting is a compiler optimization.
         let _v1 = r1.load(Ordering::Relaxed);
         let _v2 = r2.load(Ordering::Relaxed);
     });

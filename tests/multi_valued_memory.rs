@@ -18,46 +18,20 @@ use loom::sync::atomic::{AtomicUsize, Ordering};
 use loom::sync::Arc;
 use loom::thread;
 
-/// 演示在 `Relaxed` 语义下，一个线程可以读到另一个线程写入之前的旧值。
+/// 验证在 `Relaxed` 语义下 `r1 = 0 && r2 = 0` **可达**（load hoisting）。
 ///
-/// 两个线程各写一个位置、再读另一个位置。即使两个线程都执行完了，`r1` 和 `r2`
-/// 各自读到 0 （旧值）是完全合法的行为。
+/// 两个线程各写一个位置再读另一个位置。通过 witness 捕获目标状态：
+/// loom 探索所有调度后 witness 被设置，则证明该行为确实存在。
 #[test]
-fn relaxed_can_read_old() {
-    loom::model(|| {
+fn store_buffering_reachable() {
+    let reached = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let r = reached.clone();
+
+    loom::model(move || {
         let x = Arc::new(AtomicUsize::new(0));
         let y = Arc::new(AtomicUsize::new(0));
-
-        let x1 = x.clone();
-        let y1 = y.clone();
-        let t1 = thread::spawn(move || {
-            x1.store(1, Ordering::Relaxed);
-            y1.load(Ordering::Relaxed);
-        });
-
-        let x2 = x.clone();
-        let y2 = y.clone();
-        let t2 = thread::spawn(move || {
-            y2.store(1, Ordering::Relaxed);
-            x2.load(Ordering::Relaxed);
-        });
-
-        t1.join().unwrap();
-        t2.join().unwrap();
-    });
-}
-
-/// Store buffering 模式（IRIW 的变体）：两个线程各自写 X/Y 再读对方的位置。
-///
-/// 此测试仅验证 loom 能探索完所有调度，不会报错。`r1=0 && r2=0` 在 relaxed
-/// 语义下是可达的，体现了 **Multi-valued Memory** 允许读旧值的机制。
-#[test]
-fn store_buffering_allowed() {
-    loom::model(|| {
-        let x = Arc::new(AtomicUsize::new(0));
-        let y = Arc::new(AtomicUsize::new(0));
-        let r1 = Arc::new(AtomicUsize::new(0));
-        let r2 = Arc::new(AtomicUsize::new(0));
+        let r1 = Arc::new(AtomicUsize::new(usize::MAX));
+        let r2 = Arc::new(AtomicUsize::new(usize::MAX));
 
         let x1 = x.clone();
         let y1 = y.clone();
@@ -78,9 +52,13 @@ fn store_buffering_allowed() {
         t1.join().unwrap();
         t2.join().unwrap();
 
-        // Under relaxed semantics, r1=0 && r2=0 IS reachable (load hoisting).
-        // This test merely validates that loom explores all schedules without error.
-        let _v1 = r1.load(Ordering::Relaxed);
-        let _v2 = r2.load(Ordering::Relaxed);
+        if r1.load(Ordering::Relaxed) == 0 && r2.load(Ordering::Relaxed) == 0 {
+            r.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
     });
+
+    assert!(
+        reached.load(std::sync::atomic::Ordering::SeqCst),
+        "r1=0 && r2=0 must be reachable under Relaxed (load hoisting)"
+    );
 }
