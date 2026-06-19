@@ -30,14 +30,14 @@ use loom::thread;
 /// Y = r1    ||    X = 1
 /// ```
 ///
-/// **C++11**: 公理模型（modification order + visible side）允许
-/// `r1=r2=1`，但 Loom 的 operational 模拟不能跨线程内程序顺序
-/// 重排序 store 与 load，因此找不到该执行。
+/// **C++11**: 内存模型允许 `r1=r2=1`——relaxed 下 load-store 可重排序。
+///
+/// **Loom**: **不支持 store hoisting**。
 ///
 /// **Promising Semantics**: Store hoisting（promise）使 `X=1` 可在
 /// `r2=Y` 之前执行，因此 `r1=r2=1` **可达**。
 ///
-/// 两种模型结论一致（均允许），Loom 因线程内不重排序而无法建模。
+/// C++11 与 PS 结论一致（均允许），Loom 因不支持 store hoisting 而不产生此结果。
 #[test]
 fn test_store_hoisting_wo_dep() {
     loom::model(move || {
@@ -65,7 +65,7 @@ fn test_store_hoisting_wo_dep() {
         t1.join().unwrap();
         t2.join().unwrap();
 
-        // Loom 无法建模此行为，详见函数文档。
+        // Loom 不支持 store hoisting，无法产生 r1=r2=1。
         let _v1 = r1.load(Ordering::Relaxed);
         let _v2 = r2.load(Ordering::Relaxed);
     });
@@ -83,14 +83,13 @@ fn test_store_hoisting_wo_dep() {
 /// Y = r1    ||    X = r2   // X 写入依赖 r2
 /// ```
 ///
-/// **C++11**: 公理模型不追踪数据依赖，relaxed 下 `r1=r2=1` **可达**
-///（OOTA 是 C++11 公理模型的已知缺陷，规范未正式禁止）。
+/// **C++11**: 内存模型不追踪数据依赖，relaxed 下 `r1=r2=1` **可达**
+///（OOTA 是 C++11 内存模型的已知缺陷，规范未正式禁止）。
 ///
 /// **Promising Semantics**: 数据依赖禁止 store hoisting——`X=r2` 无法
 /// 在 `r2=Y` 之前执行，因此 `r1=r2=1` **不可达**（OOTA 被禁止）。
 ///
-/// 两种模型对此场景结论不同（C++11 允许，PS 禁止），Loom（operational 模型）
-/// 通过操作序贯化与 PS 一致：`r1=r2=1` **不可达**。  
+/// 两种模型对此场景结论不同（C++11 允许，PS 禁止），Loom 不支持 store hoisting：`r1=r2=1` **不可达**。  
 #[test]
 fn test_store_hoisting_w_dep_oota() {
     loom::model(|| {
@@ -139,11 +138,13 @@ fn test_store_hoisting_w_dep_oota() {
 /// Y = r1    ||    if r2 == 1 { X = r2 } else { X = 1 }
 /// ```
 ///
-/// **C++11**: 同场景 ①，公理模型允许 `r1=r2=1`。
+/// **C++11**: 同场景 ①，内存模型允许 `r1=r2=1`。
+///
+/// **Loom**: 同场景 ①，不支持 store hoisting。
 ///
 /// **Promising Semantics**: 同场景 ①，store hoisting 使 `r1=r2=1` **可达**。
 ///
-/// 两种模型结论一致（均允许），Loom 无法建模。
+/// C++11 与 PS 结论一致（均允许），Loom 因不支持 store hoisting 而不产生此结果。
 #[test]
 fn test_store_hoisting_syntactic_dep() {
     loom::model(|| {
@@ -175,7 +176,7 @@ fn test_store_hoisting_syntactic_dep() {
         t1.join().unwrap();
         t2.join().unwrap();
 
-        // Loom 无法建模，详见场景 ① 文档。
+        // Loom 不支持 store hoisting，无法产生 r1=r2=1。
         let _v1 = r1.load(Ordering::Relaxed);
         let _v2 = r2.load(Ordering::Relaxed);
     });
@@ -195,14 +196,13 @@ fn test_store_hoisting_syntactic_dep() {
 /// ```
 ///
 /// **C++11**: `r3 = X` sequenced-before 所有 X 写（两个分支均写 X=1），
-/// 因此 r3 只能读到 0。`r1=r2=1`（同场景 ① LB 模式）在 C++11 relaxed 下
-/// **可达**，但 r3 始终为 0，故 `r1=r2=r3=1` **不可达**。
+/// 因此 r3 只能读到 0。`r1=r2=1` 在 C++11 relaxed 下**可达**，但 r3 始终为 0，故 `r1=r2=r3=1` **不可达**。
 ///
 /// **Promising Semantics**: Thread 2 可 promise X=1（语法依赖），
 /// 然后 r3=X 读到自身 promise 值 1，更新 per-thread view 到 promise
 /// 位置，导致后续 X=1 无法在正确位置写入兑现。因此 `r1=r2=r3=1` **不可达**。
 ///
-/// 两种模型结果相同（`r1=r2=r3=1` 不可达），但机制不同。
+/// Loom 不支持 store hoisting，与两种模型结果相同（`r1=r2=r3=1` 不可达），但机制不同。
 #[test]
 fn test_store_hoisting_syntactic_dep_rw_coherence() {
     loom::model(|| {

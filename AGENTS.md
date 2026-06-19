@@ -42,7 +42,7 @@ CLH lock's `Drop` uses `swap(null)` instead of `get_mut()` because Loom's `Atomi
 
 Tests that assert a behaviour **is reachable** (store-buffering) use a witness `std::sync::Arc<std::sync::atomic::AtomicBool>` outside `loom::model` to capture the target state, then assert it was reached.  Loom does not track std atomics, so the witness adds no branching overhead.
 
-Promises scenarios 1 and 3 (store hoisting w/o dep, syntactic dep): the LB pattern `r1=X;Y=r1 || r2=Y;X=1` is allowed by the C++11 axiomatic model (relaxed atomics permit store-load reordering for different locations).  Loom's operational model cannot find `r1=r2=1` because it executes per-thread ops in program order without reordering.  These tests run without outcome assertions — only verifying no UB or deadlock.
+Promises scenarios 1 and 3 (store hoisting w/o dep, syntactic dep): the LB pattern `r1=X;Y=r1 || r2=Y;X=1` is allowed by the C++11 axiomatic model (relaxed atomics permit store-load reordering for different locations).  Loom's operational model does **not** support store hoisting, so `r1=r2=1` is unreachable.  These tests run without outcome assertions — only verifying no UB or deadlock.
 
 Promises scenario 2 (OOTA) differs: C++11 relaxed **also** allows `r1=r2=1` (the model does not track data dependencies), but Loom blocks it through sequential interleaving.  PS blocks it via data-dependency constraints on promises.  Scenario 2 has a correctness assertion (`r1=r2=1` must be impossible).
 
