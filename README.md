@@ -1,6 +1,6 @@
 # Relaxed Memory Concurrency
 
-> 使用 [Loom](https://github.com/tokio-rs/loom) 框架对 **Promising Semantics** 的四个核心机制及三种锁实现进行模型检测。
+> 使用 [Loom](https://github.com/tokio-rs/loom) 对 **Promising Semantics** 建模的 relaxed behaviors & orderings 及三种锁实现进行测试。
 
 ## 项目结构
 
