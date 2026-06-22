@@ -17,8 +17,8 @@ tests/
 ├── message_adjacency.rs      # ② RMW 原子性
 ├── views.rs                  # ③ Coherence + Synchronization
 ├── promises.rs               # ④ Store Hoisting
-├── ebr_tests.rs              # ⑤ Epoch-Based Reclamation
-└── lock_tests.rs             # ⑥ SpinLock / TicketLock / CLHLock
+├── ebr_tests.rs              #   Epoch-Based Reclamation
+└── lock_tests.rs             #   SpinLock / TicketLock / CLHLock
 ```
 
 ## Relaxed Behaviors & Orderings Test
@@ -75,7 +75,7 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 | `test_store_hoisting_syntactic_dep` | 语法依赖 | 允许 | 不支持 | **可达** |
 | `test_store_hoisting_syntactic_dep_rw_coherence` | 语法依赖 + RW coherence | `r1=r2=1` 允许，`r3=0`（故三者同时为 1 不可达） | 不可达 | **不可达** |
 
-## ⑤ EBR GC — Epoch-Based Reclamation
+## EBR GC — Epoch-Based Reclamation
 
 基于 Fraser epoch 算法、遵循 crossbeam-relaxed-memory RFC 内存顺序的 EBR 垃圾回收器。
 
@@ -95,7 +95,7 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 | `test_rfc_case1_retire_before_pin` | RFC Case 1: unlink 的 SC fence < pin 的 SC fence |
 | `test_rfc_case2_pin_before_retire` | RFC Case 2: pin 的 SC fence < unlink 的 SC fence |
 
-## ⑥ Mutex Lock
+## Mutex Lock
 
 | 锁 | lock | unlock | 关键语义 |
 |----|------|--------|---------|
