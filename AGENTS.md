@@ -8,7 +8,7 @@ cargo check --workspace
 cargo build --workspace
 ```
 
-All 20 tests pass.
+All 26 tests pass.
 
 ## Test quirk — `--test-threads=1` is required
 
@@ -19,6 +19,23 @@ Loom uses global state. Parallel execution causes spurious failures.
 - `Cargo.toml`: `loom = "0.7"` (non-optional), edition 2024
 - Source files: `use loom::sync::atomic::*`
 - Test files: `use loom::*` directly
+
+## EBR implementation (`src/ebr.rs`)
+
+- 3-epoch Fraser algorithm, RFC `crossbeam-relaxed-memory.md` alignment
+- `pin()`: `load(Relaxed)` → `store(Relaxed)` → `fence(SeqCst)`
+- `unpin()`: `store(SENTINEL, Release)`
+- `retire()`: `fence(SeqCst)` → `global_epoch.load(Relaxed)` → push to `retire_lists[epoch]`
+- `try_advance()`: `load(Relaxed)` → `fence(SeqCst)` → check all threads → `fence(Acquire)` → `store(Release)` → free `list[(g+2)%3]`
+- 3 global retire lists `Mutex<[Vec<usize>; 3]>` indexed by epoch
+- Object freed after exactly 2 epoch advances from `retire()` call (uses `global_epoch`, not `local_epoch`)
+
+## EBR test patterns
+
+- Sequential tests (`test_basic_reclamation`, etc.): single-thread retire + epoch advancement
+- RFC Case 1 (`test_rfc_case1_retire_before_pin`): shared `AtomicUsize` simulates data structure; `done` flag (Release/Acquire) verifies U's removal is visible to A when retire completes before A's pin
+- RFC Case 2 (`test_rfc_case2_pin_before_retire`): A reads shared data while U concurrently retires; loom explores all interleavings verifying no UB
+- Concurrent safety: external `std::sync::atomic::AtomicBool` witness pattern detects premature free (pinning thread still active when object freed)
 
 ## Lock implementations (`src/`)
 
@@ -38,6 +55,7 @@ All locks return a token from `lock()` that `unlock()` consumes.
 
 | File | Count | Verifies |
 |------|-------|----------|
+| `ebr_tests.rs` | 6 | EBR GC: protocol correctness + RFC Case 1/2 concurrent |
 | `multi_valued_memory.rs` | 1 | Load hoisting under `Relaxed` (witness-proven reachable) |
 | `message_adjacency.rs` | 2 | RMW adjacency (no double-zero, 3-thread chain) |
 | `views.rs` | 7 | RR/RW/WR/WW coherence + Release/Acquire + SC fence + relaxed control |

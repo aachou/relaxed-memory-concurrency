@@ -22,7 +22,7 @@ use loom::thread;
 /// 根据 Message Adjacency：第一个 RMW 读 0 写 1，第二个 RMW 只能邻接到 1
 /// 的右侧读 1 写 2。因此 `r1 + r2 == 1` 必然成立。
 #[test]
-fn message_adjacency_rmw_2_threads() {
+fn test_message_adjacency_rmw_2_threads() {
     loom::model(|| {
         let x = Arc::new(AtomicUsize::new(0));
         let r1 = Arc::new(AtomicUsize::new(0));
@@ -54,7 +54,7 @@ fn message_adjacency_rmw_2_threads() {
 /// Message Adjacency 保证了 RMW 链式串联：读到 0、1、2 各一次，不会重复。
 /// 最终 X 的值等于线程数，没有丢失任何一次加法。
 #[test]
-fn message_adjacency_rmw_3_threads() {
+fn test_message_adjacency_rmw_3_threads() {
     loom::model(|| {
         let x = Arc::new(AtomicUsize::new(0));
         let r1 = Arc::new(AtomicUsize::new(0));
