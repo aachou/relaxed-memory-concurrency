@@ -9,14 +9,16 @@ src/
 ├── lib.rs              # 模块声明
 ├── spin_lock.rs        # SpinLock — CAS + Acquire/Release
 ├── ticket_lock.rs      # TicketLock — fetch_add + Acquire/Release
-└── clh_lock.rs         # CLHLock — swap(AcqRel) + 链表队锁
+├── clh_lock.rs         # CLHLock — swap(AcqRel) + 链表队锁
+└── ebr.rs              # Epoch-Based Reclamation（Fraser 三 epoch，RFC 对齐）
 
 tests/
 ├── multi_valued_memory.rs    # ① Load Hoisting
 ├── message_adjacency.rs      # ② RMW 原子性
 ├── views.rs                  # ③ Coherence + Synchronization
 ├── promises.rs               # ④ Store Hoisting
-└── lock_tests.rs             # SpinLock / TicketLock / CLHLock
+├── lock_tests.rs             # SpinLock / TicketLock / CLHLock
+└── ebr_tests.rs              # ⑤ Epoch-Based Reclamation
 ```
 
 ## Relaxed Behaviors & Orderings Test
@@ -73,6 +75,26 @@ Store hoisting 的 LB 模式 (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 公
 | `test_store_hoisting_syntactic_dep` | 语法依赖 | 允许 | 不支持 | **可达** |
 | `test_store_hoisting_syntactic_dep_rw_coherence` | 语法依赖 + RW coherence | `r1=r2=1` 允许，`r3=0`（故三者同时为 1 不可达） | 不可达 | **不可达** |
 
+## ⑤ Epoch-Based Reclamation — EBR GC
+
+基于 Fraser 三 epoch 算法、遵循 crossbeam-relaxed-memory RFC 内存顺序的 EBR 垃圾回收器。
+
+| 关键操作 | 内存顺序 |
+|---------|---------|
+| `pin()` | `load(Relaxed)` → `store(Relaxed)` → `fence(SeqCst)` |
+| `unpin()` | `store(SENTINEL, Release)` |
+| `retire()` | `fence(SeqCst)` → `load(Relaxed)` → 入 `retire_lists[epoch]` |
+| `try_advance()` | `load(Relaxed)` → `fence(SeqCst)` → 检查所有线程 → `fence(Acquire)` → `store(Release)` |
+
+| 测试 | 验证 |
+|------|------|
+| `test_basic_reclamation` | 单线程退役 + 两次 epoch 推进后 obj 被释放 |
+| `test_full_epoch_rotation` | 三个 epoch 轮转，每个 epoch 退役的对象两次推进后释放 |
+| `test_multiple_retires_same_epoch` | 同一 epoch 退役多个 obj 同时释放 |
+| `test_repeated_pin` | 重复 pin/unpin 不影响正确性 |
+| `test_rfc_case1_retire_before_pin` | RFC Case 1: unlink 的 SC fence < pin 的 SC fence，通过 `done` 标志 + Release/Acquire 验证 U 移除后 A 看不到 obj |
+| `test_rfc_case2_pin_before_retire` | RFC Case 2: pin 的 SC fence < unlink 的 SC fence，loom 探索所有交错验证无 UB |
+
 ## Mutex Lock
 
 | 锁 | lock | unlock | 关键语义 |
@@ -98,12 +120,14 @@ Store hoisting 的 LB 模式 (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 公
 cargo promises
 ```
 
-运行所有 20 个测试，Loom 会穷举所有线程交错，验证断言在所有调度下均成立。
+运行所有 26 个测试，Loom 会穷举所有线程交错，验证断言在所有调度下均成立。
 
 ## Reference
 
 - [Promising Semantics](https://sf.snu.ac.kr/promise-concurrency/)
 - [Loom](https://github.com/tokio-rs/loom)
 - [KAIST CS431: Concurrent Programming](https://github.com/kaist-cp/cs431)
+- [crossbeam-relaxed-memory RFC](./docs/crossbeam-relaxed-memory.md)
+- [RC11: Repairing Sequential Consistency in C/C++11 笔记](./docs/scfix-summary.md)
 
 完整文档：[Relaxed Memory Concurrency](./relaxed%20memory%20concurrency.md)
