@@ -10,7 +10,7 @@ src/
 ├── spin_lock.rs        # SpinLock — CAS + Acquire/Release
 ├── ticket_lock.rs      # TicketLock — fetch_add + Acquire/Release
 ├── clh_lock.rs         # CLHLock — swap(AcqRel) + 链表队锁
-└── ebr.rs              # Epoch-Based Reclamation（Fraser 三 epoch，RFC 对齐）
+└── ebr.rs              # Epoch-Based Reclamation（Fraser epoch，RFC 对齐）
 
 tests/
 ├── multi_valued_memory.rs    # ① Load Hoisting
@@ -77,7 +77,7 @@ Store hoisting 的 LB 模式 (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 公
 
 ## ⑤ Epoch-Based Reclamation — EBR GC
 
-基于 Fraser 三 epoch 算法、遵循 crossbeam-relaxed-memory RFC 内存顺序的 EBR 垃圾回收器。
+基于 Fraser epoch 算法、遵循 crossbeam-relaxed-memory RFC 内存顺序的 EBR 垃圾回收器。
 
 | 关键操作 | 内存顺序 |
 |---------|---------|

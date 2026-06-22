@@ -22,7 +22,7 @@ Loom uses global state. Parallel execution causes spurious failures.
 
 ## EBR implementation (`src/ebr.rs`)
 
-- 3-epoch Fraser algorithm, RFC `crossbeam-relaxed-memory.md` alignment
+- Fraser epoch algorithm, RFC `crossbeam-relaxed-memory.md` alignment
 - `pin()`: `load(Relaxed)` → `store(Relaxed)` → `fence(SeqCst)`
 - `unpin()`: `store(SENTINEL, Release)`
 - `retire()`: `fence(SeqCst)` → `global_epoch.load(Relaxed)` → push to `retire_lists[epoch]`
