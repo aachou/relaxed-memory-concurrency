@@ -89,7 +89,9 @@ fn test_store_hoisting_wo_dep() {
 /// **Promising Semantics**: 数据依赖禁止 store hoisting——`X=r2` 无法
 /// 在 `r2=Y` 之前执行，因此 `r1=r2=1` **不可达**（OOTA 被禁止）。
 ///
-/// 两种模型对此场景结论不同（C++11 允许，PS 禁止），Loom 不支持 store hoisting：`r1=r2=1` **不可达**。  
+/// **Loom** 不支持 store hoisting——`r1=r2=1` **不可达**。断言通过的原因是
+/// loom 的限制，而非数据依赖的约束。PS 的"OOTA 被禁止"仍需模型检查器
+/// 支持 store hoisting 才能验证。  
 #[test]
 fn test_store_hoisting_w_dep_oota() {
     loom::model(|| {

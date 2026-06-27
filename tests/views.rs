@@ -165,6 +165,11 @@ fn test_release_acquire_sync() {
 /// **SC Fence 同步**：`fence(SC)` 会将当前线程的 view 与 global view 合并为
 /// 两者的最新值，使得即使使用 `Relaxed` 操作也能跨线程传递消息。
 ///
+/// **注意**：此测试在 loom 下通过是因为 loom 的 `fence(SeqCst)` 实现使用全局
+/// causality 向量（版本向量 join），强度高于标准 C++11。在标准 C++11 中，
+/// 两个 `fence(SeqCst)` 之间若无 release-acquire 变量握手，不能保证跨变量
+/// Relaxed 操作的可见性。
+///
 /// 对应文档：
 /// ```rust
 /// X = 1;              ||   if Y.load(relaxed) == 1 {
