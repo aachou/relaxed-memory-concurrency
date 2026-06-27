@@ -1,6 +1,6 @@
 # Relaxed Memory Concurrency
 
-> 使用 [Loom](https://github.com/tokio-rs/loom) 对 **Promising Semantics** 建模的 Relaxed Behaviors & Orderings 及三种互斥锁进行测试。
+> 使用 [Loom](https://github.com/tokio-rs/loom) 对 **Promising Semantics** 建模的 Relaxed Behaviors & Orderings 及三种互斥锁进行测试。关于 Promising Semantics 可参考：[Relaxed Memory Concurrency](./relaxed%20memory%20concurrency.md)。
 
 ## Structure
 
@@ -128,6 +128,3 @@ cargo promises
 - [Loom](https://github.com/tokio-rs/loom)
 - [KAIST CS431: Concurrent Programming](https://github.com/kaist-cp/cs431)
 - [crossbeam-relaxed-memory RFC](./docs/crossbeam-relaxed-memory.md)
-- [RC11: Repairing Sequential Consistency in C/C++11 笔记](./docs/scfix-summary.md)
-
-完整文档：[Relaxed Memory Concurrency](./relaxed%20memory%20concurrency.md)
