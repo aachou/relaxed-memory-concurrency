@@ -8,7 +8,7 @@ cargo check --workspace
 cargo build --workspace
 ```
 
-All 26 tests pass.
+All 28 tests pass.
 
 ## Test quirk — `--test-threads=1` is required
 
@@ -35,7 +35,8 @@ Loom uses global state. Parallel execution causes spurious failures.
 - Sequential tests (`test_basic_reclamation`, etc.): single-thread retire + epoch advancement
 - RFC Case 1 (`test_rfc_case1_retire_before_pin`): shared `AtomicUsize` simulates data structure; `done` flag (Release/Acquire) verifies U's removal is visible to A when retire completes before A's pin
 - RFC Case 2 (`test_rfc_case2_pin_before_retire`): A reads shared data while U concurrently retires; loom explores all interleavings verifying no UB
-- Concurrent safety: external `std::sync::atomic::AtomicBool` witness pattern detects premature free (pinning thread still active when object freed)
+- Advance blocking (`test_pinned_thread_blocks_advance`): external `std::sync::atomic::AtomicBool` witness verifies loom finds an interleaving where `try_advance` is blocked by a pinned thread
+- Concurrent safety (`test_concurrent_safety_fuzz`): external `std::sync::atomic::AtomicBool` witness pattern detects premature free (pinning thread still active when object freed)
 
 ## Lock implementations (`src/`)
 
@@ -55,7 +56,7 @@ All locks return a token from `lock()` that `unlock()` consumes.
 
 | File | Count | Verifies |
 |------|-------|----------|
-| `ebr_tests.rs` | 6 | EBR GC: protocol correctness + RFC Case 1/2 concurrent |
+| `ebr_tests.rs` | 8 | EBR GC: protocol correctness + RFC Case 1/2 concurrent + advance blocking + safety fuzz |
 | `multi_valued_memory.rs` | 1 | Load hoisting under `Relaxed` (witness-proven reachable) |
 | `message_adjacency.rs` | 2 | RMW adjacency (no double-zero, 3-thread chain) |
 | `views.rs` | 7 | RR/RW/WR/WW coherence + Release/Acquire + SC fence + relaxed control |
@@ -65,3 +66,14 @@ All locks return a token from `lock()` that `unlock()` consumes.
 Tests that assert a behaviour **is reachable** use a witness `std::sync::Arc<std::sync::atomic::AtomicBool>` outside `loom::model` to capture the target state, then assert it was reached. Loom does not track std atomics, so the witness adds no branching overhead.
 
 Promises scenarios 1 and 3: Loom does not support store hoisting, so `r1=r2=1` is unreachable. These tests run without outcome assertions — only verifying no UB or deadlock.
+
+## Release
+
+```bash
+# Bump version in Cargo.toml, then:
+git tag v0.x.x
+git push origin v0.x.x
+gh release create v0.x.x --title "v0.x.x - Short Description" --notes-file /tmp/release-notes.md
+```
+
+**Note**: Use `--notes-file` with a temp file, not `--notes`. The latter causes escaping issues with `"` and `\` in PowerShell.

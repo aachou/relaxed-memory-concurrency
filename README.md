@@ -94,6 +94,8 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 | `test_repeated_pin` | 重复 pin/unpin 不影响正确性 |
 | `test_rfc_case1_retire_before_pin` | RFC Case 1: unlink 的 SC fence < pin 的 SC fence |
 | `test_rfc_case2_pin_before_retire` | RFC Case 2: pin 的 SC fence < unlink 的 SC fence |
+| `test_pinned_thread_blocks_advance` | 线程 pin 在旧 epoch 时阻塞 `try_advance`（外部 witness 验证） |
+| `test_concurrent_safety_fuzz` | 并发安全：pin 住期间 obj 不会被释放（外部 witness 验证） |
 
 ## Mutex Lock
 
@@ -120,7 +122,7 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 cargo promises
 ```
 
-运行所有 26 个测试，Loom 会穷举所有线程交错，验证断言在所有调度下均成立。
+运行所有 28 个测试，Loom 会穷举所有线程交错，验证断言在所有调度下均成立。
 
 ## Reference
 
