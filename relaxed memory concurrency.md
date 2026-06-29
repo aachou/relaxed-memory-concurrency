@@ -38,22 +38,22 @@
 - 写操作对所有处理器（包括写者自己）同时可见，不允许通过 store buffer 提前看到自己的写
 - 理论最强约束，实际硬件很少完全实现
 
-### 各模型属性对比
+### Comparison
 
-| 模型 | Store Atomicity | 允许的乱序 | 代表平台 | 核心特征 |
-|------|----------------|-----------|---------|---------|
-| **SC** | Atomic Store（第4级） | 无 | 理想模型 | 全局全序执行，最符合直觉但性能受限 |
-| **TSO** | Load Own Store Early（第3级） | Store-Load 允许 | x86 | Load 天然是 Acquire，Store 天然是 Release |
-| **RCpc** | Load Other's Store Early && Causality（第2级） | LL/LS/SL/SS 均允许 | 弱一致性系统 | 保证因果传递性，Acquire/Release 控制同步 |
-| **WO/RCsc** | Load Own Store Early（第3级） | LL/LS/SL/SS 允许（仅普通访存，同步操作不允乱序） | ARM 等 | 区分普通数据与同步变量，临界区内允许乱序但不能跨过同步操作 |
+| 模型        | Store Atomicity                                | 允许的乱序                                       | 代表平台     | 核心特征                                                   |
+| ----------- | ---------------------------------------------- | ------------------------------------------------ | ------------ | ---------------------------------------------------------- |
+| **SC**      | Atomic Store（第4级）                          | 无                                               | 理想模型     | 全局全序执行，最符合直觉但性能受限                         |
+| **TSO**     | Load Own Store Early（第3级）                  | Store-Load 允许                                  | x86          | Load 天然是 Acquire，Store 天然是 Release                  |
+| **RCpc**    | Load Other's Store Early && Causality（第2级） | LL/LS/SL/SS 均允许                               | 弱一致性系统 | 保证因果传递性，Acquire/Release 控制同步                   |
+| **WO/RCsc** | Load Own Store Early（第3级）                  | LL/LS/SL/SS 允许（仅普通访存，同步操作不允乱序） | ARM 等       | 区分普通数据与同步变量，临界区内允许乱序但不能跨过同步操作 |
 
 **SC（Sequential Consistency）** 是最严格的模型：所有线程以交错方式访问内存，每个线程内按代码顺序执行，所有线程看到相同的全局操作顺序。任何弱于 SC（即允许更多乱序或写原子性更弱）的模型都统称为**宽松内存模型（Relaxed Memory Model）**。不同的宽松模型在乱序和写原子性上各有取舍。
 
-## Nondeterminism due to shared memory accesses
+## Nondeterminism Due To Shared Memory Accesses
 
 共享内存并发程序的不确定性主要来自两个来源：线程交错（thread interleaving）和指令重排序（instruction reordering）。
 
-### thread interleaving
+### Thread Interleaving
 
 线程交错指多线程的 Load/Store 指令交替执行，导致结果不确定。例如：
 
@@ -66,7 +66,7 @@ X = 1;               X = 2;
 
 最终 X 的值可能是 1（线程1 先执行）或 2（线程2 先执行）。这种不确定性容易推断。
 
-### reordering
+### Reordering
 
 指令重排序指内存操作实际执行的顺序与程序代码不一致，导致反直觉的结果。编译器会直接重排指令；硬件则通过 store buffer、乱序执行等机制让其他线程观察到**如同**指令被重排了一样的效果。重排序可以发生在任意两个内存操作之间。
 
@@ -79,16 +79,18 @@ FLAG.store(1);        ||       assert_eq!(DATA, 42);
 ```
 
 如果只有线程交错，上述程序**不可能失败**：
+
 - 线程2 先执行 `if` → `FLAG == 0`，不进入分支
 - 线程1 先执行 `DATA = 42; FLAG.store(1)`，然后线程2 执行 `if` → `FLAG == 1`，进入分支时 `DATA` 已经是 42
 
 但存在重排序时，断言可能失败：
+
 - **Store hoisting**：`FLAG.store(1)` 先于 `DATA = 42` 执行，线程2 看到 `FLAG == 1` 但还没看到 `DATA = 42`
 - **Load hoisting**：`assert_eq!(DATA, 42)` 先于 `FLAG.load()` 执行，读到 `DATA` 的旧值
 
 这种重排序导致的意外行为称为 **relaxed behaviors**，无法在线程交错语义中观察到。
 
-### 解决方案：禁止重排序
+### No Reordering
 
 使用 **Release/Acquire** 可以防止重排序：
 
@@ -131,22 +133,22 @@ FLAG.store(1, relaxed);   ||       assert(DATA == 42);
 X = 1;   r1 = Y;      ||      Y = 1;   r2 = X;
 ```
 
-![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-1.png)
+![img](./static/images/relaxed-memory-concurrency/multi-value-memory-1.png)
 线程1执行 `X = 1`，插如 `X = 1` message：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-2.png)
+[![img](./static/images/relaxed-memory-concurrency/multi-value-memory-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-2.png)
 
 线程2执行 `Y = 1`，插入 `Y = 1` message：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-3.png)
+[![img](./static/images/relaxed-memory-concurrency/multi-value-memory-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-3.png)
 
 线程1执行 `r1 = Y`，读到 `Y = 0` message，`r1 = 0`：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-4.png)
+[![img](./static/images/relaxed-memory-concurrency/multi-value-memory-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-4.png)
 
 线程2执行 `r2 = X`，读到 `X = 0` message，`r2 = 0`：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-5.png)
+[![img](./static/images/relaxed-memory-concurrency/multi-value-memory-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/multi-value-memory-5.png)
 
 
 
@@ -162,15 +164,15 @@ X = 1;   r1 = Y;      ||      Y = 1;   r2 = X;
 r1=X.fetch_add(1)       ||        r2=X.fetch_add(1)
 ```
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-1.png)
+[![img](./static/images/relaxed-memory-concurrency/message-adjacency-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-1.png)
 
 线程1执行 `r1 = X.fetch_add(1)`，`X = 1` message 被邻接到 `X = 0` 的 右边，`r1 = 0`：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-2.png)
+[![img](./static/images/relaxed-memory-concurrency/message-adjacency-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-2.png)
 
 线程2执行 `r2 = X.fetch_add(1)`，`X = 0` 已经被邻接了，`X = 2` 只能邻接到 `X = 1` 的右边，只能读到 `X = 1`，结果 `r2 = 1`：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-3.png)
+[![img](./static/images/relaxed-memory-concurrency/message-adjacency-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/message-adjacency-3.png)
 
 ### Views
 
@@ -201,7 +203,7 @@ Per-thread View 保证 per-location coherence（同一地址的读写一致性�
 
 以 WR coherence 为例：
 
-![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-thread-view-1.png)
+![img](./static/images/relaxed-memory-concurrency/per-thread-view-1.png)
 
 `X = 1` 插入新 message，线程 view 变为 X = 1 & Y = 0，执行 `r = X` 就只能读到 `X = 1` message。
 
@@ -216,23 +218,23 @@ X = 1;                         ||   if Y.load(acquire) == 1:
 Y.store(1, release);           ||       assert(X == 1);  // 一定成功
 ```
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-1.png)
+[![img](./static/images/relaxed-memory-concurrency/per-message-view-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-1.png)
 
 线程1执行 `X = 1`，插入 `X=1` message，线程1的视图变为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-2.png)
+[![img](./static/images/relaxed-memory-concurrency/per-message-view-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-2.png)
 
 线程1执行 `Y.store(1, release)`，插入 `Y=1` message，线程1的视图变为 X = 1 & Y = 1，release 会生成 message view：X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-3.png)
+[![img](./static/images/relaxed-memory-concurrency/per-message-view-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-3.png)
 
 线程2执行 `Y.load(acquire)`，线程2读到 `Y=1` message，线程2的视图变为 X = 0 & Y = 1，acquire 会把 message view 会合并到线程2的 view 中，线程2的视图变为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-4.png)
+[![img](./static/images/relaxed-memory-concurrency/per-message-view-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-4.png)
 
 线程2执行 `assert(X == 1)`，线程2的 view 为 X = 1 & Y = 1，会读到 X=1 message，断言执行成功：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-5.png)
+[![img](./static/images/relaxed-memory-concurrency/per-message-view-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/per-message-view-5.png)
 
 通过 Release/Acquire 的使用，可以实现 message 在不同线程之间的传递。
 
@@ -248,27 +250,27 @@ fence(SC)					   ||			     fence(SC)
 Y.store(1, relaxed)			   ||                assert(X == 1)
 ```
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-1.png)
+[![img](./static/images/relaxed-memory-concurrency/global-view-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-1.png)
 
 线程1执行 `X = 1`，插入 X = 1 message，线程1的 view 变为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-2.png)
+[![img](./static/images/relaxed-memory-concurrency/global-view-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-2.png)
 
 线程1执行 `fence(SC)`，SC view 和 thread1 view 成为它们之间的最大者，thread1 view 保持不变，SC view 变为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-3.png)
+[![img](./static/images/relaxed-memory-concurrency/global-view-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-3.png)
 
 线程1执行 `Y.store(1, relaxed)`，插入 Y = 1 message，线程1的 view 变为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-4.png)
+[![img](./static/images/relaxed-memory-concurrency/global-view-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-4.png)
 
 线程2执行 `Y.load(relaxed)`，线程2读到 Y = 1 message，线程2的 view 变为 X = 0 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-5.png)
+[![img](./static/images/relaxed-memory-concurrency/global-view-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-5.png)
 
 线程2执行 `fence(SC)`，SC view 和 thread2 view 成为它们之间的最大者，thread2 view 变为 X = 1 & Y = 1，SC view 变为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-6.png)
+[![img](./static/images/relaxed-memory-concurrency/global-view-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/global-view-6.png)
 
 线程2执行 `assert(X == 1)`，线程2的 view 为 X = 1 & Y = 1，因此线程2会读到 X = 1 message，断言执行成功。
 
@@ -310,111 +312,111 @@ Promises 的思路是只允许 semantically independent writes hoisting，即允
 
 **（1）Store hoisting w/o dependency（r1=r2=1 allowed by reordering）**
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-1.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-1.png)
 
 线程2 promise to write X = 1，插入 X = 1 message：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-2.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-2.png)
 
 为验证线程2可以完成 promise write，屏蔽掉线程1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-5.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-5.png)
 
 线程2执行 `r2=Y`，读取 `Y = 0` message。线程2执行 `X = 1`，插入 X = 1 message，兑现 promise write，线程2的视图更新为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-6.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-6.png)
 
 promise write 得到验证，将线程2的视图还原，将 X = 1 message 标记为 Certified：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-7.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-7.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-7.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-7.png)
 
 线程1执行 `r1 = X`，读 X = 1 message，线程1的视图更新为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-8.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-8.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-8.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-8.png)
 
 线程1执行 `Y = r1`，插入 Y = 1 message，线程1的视图更新为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-9.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-9.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-9.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-9.png)
 
 线程2执行 `r2 = Y`，读 Y = 1 message，线程2的视图更新为 X = 0 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-10.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-10.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-10.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-10.png)
 
 线程2执行 `X = 1` 兑现 promise write，promise 得到二次验证，将 X = 1 message 标记为 Re-Certified：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-11.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-11.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-11.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-11.png)
 
 线程2执行 `X = 1`，兑现 promise write，线程2的视图更新为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-12.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-12.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-1-12.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-1-12.png)
 
 **（2）Store hoisting w/ dependency（r1=r2=1 disallowed, OOTA）**
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-2-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-2-1.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-2-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-2-1.png)
 
 线程2 promise to write X = 1，插入 X = 1 message。屏蔽线程1，线程2执行 `r2 = Y` 读取 Y = 0 message，r2 = 0。线程2执行 `X = r2`，因为 r2 = 0，线程2无法兑现 promise write，执行失败。
 
 **（3）Store hoisting w/ syntactic dependency（r1=r2=1 allowed by compiler opt）**
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-1.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-1.png)
 
 线程2 promise to write X = 1，插入 X = 1 message：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-2.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-2.png)
 
 为验证线程2可以兑现 promise write，需屏蔽掉线程1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-5.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-5.png)
 
 线程2执行 `r2=Y`，读 `Y = 0` message。接着，线程2进入 else 分支，执行 `X = 1`，插入 X = 1 message，兑现 promise write，线程2的视图更新为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-6.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-6.png)
 
 promise write 得到验证，将线程2的视图还原，将 X = 1 message 标记为 Certified：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-7.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-7.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-7.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-7.png)
 
 线程1执行 `r1 = X`，读 X = 1 message，线程1的视图更新为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-8.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-8.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-8.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-8.png)
 
 线程1执行 `Y = r1`，插入 Y = 1 message，线程1的视图更新为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-9.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-9.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-9.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-9.png)
 
 线程2执行 `r2 = Y`，读取 Y = 1 message，线程2的视图更新为 X = 0 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-10.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-10.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-10.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-10.png)
 
 线程2执行 `if r2 == 1` 进入 if 分支内部，接着执行 `X = r2` 兑现 promise write，promise 得到二次验证，将 X = 1 message 标记为 Re-Certified：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-11.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-11.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-11.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-11.png)
 
 线程2执行 `X = r2`，兑现 promise write，线程2的视图更新为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-12.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-12.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-3-12.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-3-12.png)
 
 **（4）store hoisting w/ syntactic dependency（r1=r2=r3=1 disallowed due to RW coherence）**
 
 线程2 promise to write X = 1，并验证 promise（验证过程与前面一致，这里跳过）：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-1.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-4-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-1.png)
 
 线程1执行 `r1 = X`，读 X = 1 message，线程1的视图变为 X = 1 & Y = 0：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-2.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-4-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-2.png)
 
 线程1执行 `Y = r1`，插入 Y = 1 message，线程1的视图变为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-3.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-4-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-3.png)
 
 线程2执行 `r2=Y`，读取 `Y = 1` message，线程2的视图变为 X = 0 & Y = 1。线程2执行 `r3 = X`，读到 X = 1 message，线程2的视图变为 X = 1 & Y = 1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-4.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-4-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-4.png)
 
 `r2 = 1`，进入 if 分支内部执行 `X = r2`，线程2的视图已经变为 X = 1 & Y = 1，只能在当前视图的右边插入新的 X = 1 message，无法兑现 promise write，执行失败：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-5.png)
+[![img](./static/images/relaxed-memory-concurrency/promises-4-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/promises-4-5.png)
 
 通过 promises 机制：
 
@@ -432,39 +434,39 @@ fn lock(&self)   { while self.inner.cas(false, true, acquire).is_err() {} }
 fn unlock(&self) { self.inner.store(false, release); }
 ```
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-1.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-1.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-1.png)
 
 线程1读取 L = F message，邻接 L = T message，message view 合并到线程1的 view 中，线程1的 view 变为 L = T & D = S1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-2.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-2.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-2.png)
 
 线程1修改 D，插入 D = S2 message，线程1的view 变为 L = T & D = Something2：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-3.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-3.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-3.png)
 
 线程2读 L = T message，进入自旋，message view 合并到线程2的 view 中，线程2的 view 变为 L = T & D = S1：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-4.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-4.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-4.png)
 
 线程1插入 L = F message，线程1的视图变为 L = F & D = S2，生成 message view：L = F & D = S2：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-5.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-5.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-5.png)
 
 线程2读 L = F message，邻接 L = T message，message view 合并到线程2的 view 中，线程2的 view 变为 L = T & D = S2：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-6.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-6.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-6.png)
 
 线程2插入 D = S3 message，线程2的view 变为 L = T & D = S3：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-7.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-7.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-7.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-7.png)
 
 线程2插入 L = F message，线程2的视图变为 L = F & D = S3，生成 message view：L = F & D = S3：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-8.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-8.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-8.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-8.png)
 
 全部执行流程如下：
 
-[![img](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-9.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-9.png)
+[![img](./static/images/relaxed-memory-concurrency/spin-lock-9.png)](https://night-cruise.github.io/2022/11/27/relaxed-memory-concurrency/spin-lock-9.png)
 
 通过 CAS + Acquire 获取锁，Store + Release 释放锁。Release 生成的 message view（含有被保护数据的最新值）会在下一个线程 Acquire 时合并到其视图中，从而保证持有锁时访问到最新数据。两个线程持有锁的时间戳区间不相交。
 
@@ -502,8 +504,9 @@ fn unlock(&self, token: Token) {
 
 **三种锁的共同点**：持有锁的时间戳区间不相交，通过 Release/Acquire 实现消息传递，保证持有锁时能访问到最新数据。
 
-## 参考
+## References
 
 - https://github.com/GHScan/TechNotes/blob/master/2017/Memory_Model.md
 - https://sf.snu.ac.kr/promise-concurrency/
 - https://github.com/kaist-cp/cs431
+

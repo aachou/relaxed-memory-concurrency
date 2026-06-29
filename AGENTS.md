@@ -77,3 +77,7 @@ gh release create v0.x.x --title "v0.x.x - Short Description" --notes-file /tmp/
 ```
 
 **Note**: Use `--notes-file` with a temp file, not `--notes`. The latter causes escaping issues with `"` and `\` in PowerShell.
+
+## Relevant Files
+
+- `docs/hazard-pointers.md` — Hazard Pointers paper Chinese-English parallel translation (reviewed and corrected: all `退休`→`retired`/`retire`/`retiring`, `在存在的`→`在存在`, `的的`→`的`, `释放内存回收节点`→`回收该节点`, `退出`→`retired`, `执行执行`→`执行`, `绝对安全`→`确实安全`, `The Methodlogy`→`The Methodology`, `FIg`→`Fig.`, added missing `（风险指针）` on line 60).
