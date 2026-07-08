@@ -1,44 +1,39 @@
 # AGENTS.md
 
-## Run
+## Commands
 
 ```powershell
 cargo promises   # alias → test --tests -- --test-threads=1 --nocapture
-cargo check --workspace
-cargo build --workspace
+cargo check
+cargo build
 ```
 
-All 28 tests pass.
+## Test quirks — Loom
 
-## Test quirk — `--test-threads=1` is required
+- `--test-threads=1` is **required** — Loom uses global state; parallel runs produce spurious failures.
+- Loom's `fence(SeqCst)` is stronger than C++11: it uses global causality vectors (version-vector join). The `test_sc_fence_sync` test passes thanks to this; real C++11 SC fences without a release-acquire variable handshake would not guarantee the same.
+- Loom does **not** support store hoisting. Promises scenarios 1 and 3 (`r1=r2=1` reachable under C++11/PS) are unreachable under Loom. These tests only verify no UB/deadlock.
+- Tests asserting a behaviour **is reachable** use a `std::sync::Arc<std::sync::atomic::AtomicBool>` witness outside `loom::model`. Loom does not track std atomics, so the witness adds no branching overhead.
 
-Loom uses global state. Parallel execution causes spurious failures.
+## Build
 
-## Build architecture
+- Single crate, edition 2024, `loom = "0.7"`.
+- Source: `loom::sync::atomic::*` imports. Tests: `loom::sync::*`, `loom::thread` directly.
 
-- `Cargo.toml`: `loom = "0.7"` (non-optional), edition 2024
-- Source files: `use loom::sync::atomic::*`
-- Test files: `use loom::*` directly
+## EBR (`src/ebr.rs`)
 
-## EBR implementation (`src/ebr.rs`)
+Fraser epoch algorithm (`docs/crossbeam-relaxed-memory.md`).
 
-- Fraser epoch algorithm, RFC `crossbeam-relaxed-memory.md` alignment
-- `pin()`: `load(Relaxed)` → `store(Relaxed)` → `fence(SeqCst)`
-- `unpin()`: `store(SENTINEL, Release)`
-- `retire()`: `fence(SeqCst)` → `global_epoch.load(Relaxed)` → push to `retire_lists[epoch]`
-- `try_advance()`: `load(Relaxed)` → `fence(SeqCst)` → check all threads → `fence(Acquire)` → `store(Release)` → free `list[(g+2)%3]`
-- 3 global retire lists `Mutex<[Vec<usize>; 3]>` indexed by epoch
-- Object freed after exactly 2 epoch advances from `retire()` call (uses `global_epoch`, not `local_epoch`)
+| Op | Ordering | Note |
+|----|----------|------|
+| `pin()` | `load(Relaxed)` → `store(Relaxed)` → `fence(SeqCst)` | 3 global retire lists `Mutex<[Vec<usize>; 3]>` |
+| `unpin()` | `store(SENTINEL, Release)` | |
+| `retire()` | `fence(SeqCst)` → `load(Relaxed)` | freed after 2 epoch advances |
+| `try_advance()` | `load(Relaxed)` → `fence(SeqCst)` → check all → `fence(Acquire)` → `store(Release)` | frees `list[(g+2)%3]` |
 
-## EBR test patterns
+## Locks (`src/`)
 
-- Sequential tests (`test_basic_reclamation`, etc.): single-thread retire + epoch advancement
-- RFC Case 1 (`test_rfc_case1_retire_before_pin`): shared `AtomicUsize` simulates data structure; `done` flag (Release/Acquire) verifies U's removal is visible to A when retire completes before A's pin
-- RFC Case 2 (`test_rfc_case2_pin_before_retire`): A reads shared data while U concurrently retires; loom explores all interleavings verifying no UB
-- Advance blocking (`test_pinned_thread_blocks_advance`): external `std::sync::atomic::AtomicBool` witness verifies loom finds an interleaving where `try_advance` is blocked by a pinned thread
-- Concurrent safety (`test_concurrent_safety_fuzz`): external `std::sync::atomic::AtomicBool` witness pattern detects premature free (pinning thread still active when object freed)
-
-## Lock implementations (`src/`)
+All spin loops **must** call `loom::hint::spin_loop()` (avoids `max_branches`). CLH `Drop` uses `swap(null)` (Loom's `AtomicPtr` lacks `get_mut`). All locks return a token from `lock()` consumed by `unlock()`.
 
 | File | Spin primitive | Ordering |
 |------|---------------|----------|
@@ -46,38 +41,27 @@ Loom uses global state. Parallel execution causes spurious failures.
 | `ticket_lock.rs` | `fetch_add` + `load` | Relaxed / Acquire / Release |
 | `clh_lock.rs` | `AtomicPtr::swap` | AcqRel / Acquire / Release |
 
-All spin loops **must** call `spin_loop()` (`loom::hint::spin_loop`) to avoid Loom `max_branches` exceeded errors.
+## Theory
 
-CLH lock's `Drop` uses `swap(null)` instead of `get_mut()` because Loom's `AtomicPtr` lacks `get_mut`.
+`relaxed memory concurrency.md` — Chinese companion doc on promising semantics & relaxed memory models.
 
-All locks return a token from `lock()` that `unlock()` consumes.
-
-## Test files (`tests/`)
+## Test files
 
 | File | Count | Verifies |
 |------|-------|----------|
-| `ebr_tests.rs` | 8 | EBR GC: protocol correctness + RFC Case 1/2 concurrent + advance blocking + safety fuzz |
+| `ebr_tests.rs` | 8 | EBR GC: protocol + RFC cases + advance blocking + safety fuzz |
 | `multi_valued_memory.rs` | 1 | Load hoisting under `Relaxed` (witness-proven reachable) |
 | `message_adjacency.rs` | 2 | RMW adjacency (no double-zero, 3-thread chain) |
 | `views.rs` | 7 | RR/RW/WR/WW coherence + Release/Acquire + SC fence + relaxed control |
 | `promises.rs` | 4 | Store hoisting: w/o dep, OOTA, syntactic dep, RW-coherence block |
 | `lock_tests.rs` | 6 | SpinLock / TicketLock / CLHLock × (mutual_exclusion + message_passing) |
 
-Tests that assert a behaviour **is reachable** use a witness `std::sync::Arc<std::sync::atomic::AtomicBool>` outside `loom::model` to capture the target state, then assert it was reached. Loom does not track std atomics, so the witness adds no branching overhead.
-
-Promises scenarios 1 and 3: Loom does not support store hoisting, so `r1=r2=1` is unreachable. These tests run without outcome assertions — only verifying no UB or deadlock.
-
 ## Release
 
 ```bash
-# Bump version in Cargo.toml, then:
 git tag v0.x.x
 git push origin v0.x.x
 gh release create v0.x.x --title "v0.x.x - Short Description" --notes-file /tmp/release-notes.md
 ```
 
-**Note**: Use `--notes-file` with a temp file, not `--notes`. The latter causes escaping issues with `"` and `\` in PowerShell.
-
-## Relevant Files
-
-- `docs/hazard-pointers.md` — Hazard Pointers paper Chinese-English parallel translation (reviewed and corrected: all `退休`→`retired`/`retire`/`retiring`, `在存在的`→`在存在`, `的的`→`的`, `释放内存回收节点`→`回收该节点`, `退出`→`retired`, `执行执行`→`执行`, `绝对安全`→`确实安全`, `The Methodlogy`→`The Methodology`, `FIg`→`Fig.`, added missing `（风险指针）` on line 60).
+Use `--notes-file` (not `--notes`) to avoid escaping issues with `"` and `\` in PowerShell.

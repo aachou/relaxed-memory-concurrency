@@ -79,7 +79,7 @@ Unlike moving an item, the operation of directing a bucket pointer can be done i
 
 Magically, yet perhaps not surprisingly, recursive split-ordering is achieved by simple binary reversal: reversing the bits of the hash key so that the new key's most significant bits (MSB) are those that were originally its least significant. As detailed below and in the next section, some additional bit-wise modifications must be made to make things work properly. In Figure 1, the split-order key values are written above the nodes (the reader should disregard the rightmost binary digit at this point). For instance, the split-order value of 3 is the bit-reverse of its binary representation, which is 11000000. The dashed-line nodes are the special dummy nodes corresponding to buckets with original keys that are 0,1,2, and 3 modulo 4. The split-order keys of regular (nondashed) nodes are exactly the bit-reverse image of the original keys after turning on their MSB (in the example we used 8-bit words). For example, items 9 and 13 are in the "1 mod 4" bucket, which can be recursively split in two by inserting a new node between them.
 
-奇妙的是——但也许并不令人意外——recursive split-ordering 是通过简单的二进制位反转实现的：将哈希键的二进制位反转，使得新键的最高有效位（MSB）对应原来最低有效位。如下文和下一节所述，还需进行一些额外的按位修改才能使一切正常工作。在图 1 中，split-order key 的值写在节点上方（此时读者应忽略最右边的二进制位）。例如，3 的 split-order 值是 11000000，即其二进制表示的位反转。虚线节点是特殊 dummy 节点，对应原始键为 0、1、2、3（模 4）的 bucket。常规（非虚线）节点的 split-order key 是原始键在开启 MSB 之后进行位反转的结果（示例中使用了 8 位字）。例如，元素 9 和 13 都位于"1 mod 4"bucket 中，可以通过在它们之间插入一个新节点来递归地一分为二。
+奇妙的是——但也许并不令人意外——recursive split-ordering 是通过简单的二进制位反转实现的：将哈希键的二进制位反转，使得新键的最高有效位（MSB）对应原来最低有效位（LSB）。如下文和下一节所述，还需进行一些额外的按位修改才能使一切正常工作。在图 1 中，split-order key 的值写在节点上方（此时读者应忽略最右边的二进制位）。例如，3 的 split-order 值是 11000000，即其二进制表示的位反转。虚线节点是特殊 dummy 节点，对应原始键为 0、1、2、3（模 4）的 bucket。常规（非虚线）节点的 split-order key 是原始键在开启 MSB 之后进行位反转的结果（示例中使用了 8 位字）。例如，元素 9 和 13 都位于"1 mod 4"bucket 中，可以通过在它们之间插入一个新节点来递归地一分为二。
 
 >*不考虑位反转时，链表按原始 key 排序。决定 bucket 归属的是 key 的低位（因为哈希是 mod 2^i），而链表排序看的是整个 key（高位优先）。归属位是低位，排序时优先级最低，所以两个分裂去向的元素在链表中交错排列，无法一刀分开。
 >位反转把 key 的位顺序颠倒，原来决定归属的低位变成了高位。此时链表按反转后的值排序，归属位变成了排序时最先比较的位：归属为 0 的全部在前段，为 1 的全部在后段，两段连续无交错。只需在分界点插入一个 dummy 节点，一个 CAS 操作就能完成分裂，无需移动任何元素。*
@@ -112,7 +112,7 @@ Our hash table data structure consists of two interconnected substructures (see 
 
 The main difficulty in maintaining this structure is in managing the continuous coverage of the full length of the list by bucket pointers as the number of items in the list grows. The distribution of bucket pointers among the list items must remain dense enough to allow constant time access to any item. Therefore, new buckets need to be created and assigned to sparsely covered regions in the list.
 
-维护此结构的主要难点在于：随着链表增长，需要确保 bucket 指针在整个链表上始终保持足够密度，任意两个 bucket 入口之间的元素个数必须是常数，才能保证对任意元素的常数时间访问。因此，当链表某些区域覆盖稀疏时（即两个 bucket 之间聚集过多元素），就需要创建新的 bucket 分配到那里。
+维护此结构的主要难点在于：随着链表增长，需要确保 bucket 指针在整个链表上始终保持足够的密度，任意两个 bucket 入口之间的元素个数必须是常数，才能保证对任意元素的常数时间访问。因此，当链表某些区域覆盖稀疏时（即两个 bucket 之间聚集过多元素），就需要创建新的 bucket 分配到那里。
 
 The bucket array initially has size 2, and is doubled every time the number of items in the table exceeds size · L, where L is a small integer denoting the load factor, the maximum number of items one would expect to find in each logical bucket of the hash table. The initial state of all buckets is uninitialized, except for the bucket of index 0, which points to an empty list, and is effectively the head pointer of the main list structure. Each bucket goes through an initialization procedure when first accessed, after which it points to some node in the list.
 
@@ -153,7 +153,7 @@ In more detail, when the table size is 2^i+1, the first time bucket b+2^i is acc
 | *Dummy*    | *bucket 索引 b（数值很小，MSB 必为 0）* | *不做任何处理*       |
 | *Regular*  | *用户数据 key*                          | *先置 MSB=1，再反转* |
 
-*因为 split-order 比较从高位开始，而常规节点的 MSB 恒为 1、dummy 的 MSB 恒为 0，因此所有 dummy 节点都排在所有常规节点之前，保证了每个 bucket 的 dummy 必然是该 bucket 子链表的第一个节点。*
+*因为 split-order 比较从高位开始，而常规节点的 MSB 恒为 1、dummy 的 MSB 恒为 0，因此反转之后所有 dummy 节点都排在所有常规节点之前，保证了每个 bucket 的 dummy 必然是该 bucket 子链表的第一个节点。*
 
 ![Fig 3](../static/images/lock-free-hash-tables/Fig%203.png)
 
@@ -163,7 +163,7 @@ Figure 3 describes a bucket initialization caused by an insertion of a new key t
 
 Since the bucket array is growing, it is not guaranteed that the parent bucket of an uninitialized bucket is initialized. In this case, the parent has to be initialized (recursively) before proceeding. Though the total complexity in such a series of recursive calls is potentially logarithmic, our algorithm still works. This is because given a uniform distribution of items, the chances of a logarithmic-size series of recursive initialization calls are low, and in fact, the expected length of such a bad sequence of parent initializations is constant.
 
-由于 bucket 数组在不断增长，无法保证一个未初始化 bucket 的父 bucket 已被初始化。在这种情况下，必须在继续操作之前（递归地）初始化父 bucket。尽管这样一系列递归调用的总复杂度可能是对数级别的（*初始化时，要找到未初始化 bucket 的父 bucket，逻辑是不断清除它的最高 set bit，因此最坏情况下递归深度 = bucket 索引中 1 的个数 ~ O(i) = O(log size)*），但我们的算法仍然可行。这是因为在元素均匀分布下，出现对数规模的递归初始化调用序列的概率很低，实际上这种糟糕的父初始化序列的期望长度是常数。
+由于 bucket 数组在不断增长，无法保证一个未初始化 bucket 的父 bucket 已被初始化。在这种情况下，必须在继续操作之前（递归地）初始化父 bucket。尽管这样一系列递归调用的总复杂度可能是对数级别的（*初始化时，要找到未初始化 bucket 的父 bucket，逻辑是不断清除它的最高 set bit，因此最坏情况下递归深度 = bucket 索引中 1 的个数 ~ O(i) = O(log size)*），但我们的算法仍然可行。如果不同 bucket 在元素中分布比较均匀，出现对数规模的递归初始化调用序列的概率很低，实际上这种糟糕的父初始化序列的期望长度是常数。
 
 > *父 bucket 对应的哈希值范围是子 bucket 的两倍，因此任意一次插入/查找操作落到父 bucket 范围内的概率也是子 bucket 的两倍。在大量操作中，父 bucket 被访问到从而完成初始化的机会远比子 bucket 多，几乎总是已经初始化好了。只有连续多层父 bucket 都恰好在之前未被访问的极端情况下才会出现深层递归，而这种概率随深度指数衰减，因此期望深度是常数。*
 
@@ -265,7 +265,7 @@ Level 1（主数组）        Level 2                  Level 3                  
   0x9ABC  → Level 3 索引
   0xDEF0  → Level 4 索引（segment 内的 bucket 偏移）*
 
-*访问: `seg_table[0x1234][0x5678][0x9ABC][0xDEF0]`，4 步指针追踪就到了。因为每级覆盖范围按 2^16 指数增长，4 级就穷尽了 2^64 的地址空间，再多加一级也没意义。所以理论上限就是 4 级，常数。*
+*访问: `seg_table[0x1234][0x5678][0x9ABC][0xDEF0]`，只需 4 步指针追踪就到了。因为每级覆盖范围按 2^16 指数增长，4 级就穷尽了 2^64 的地址空间，再多加一级也没意义。所以理论上限就是 4 级，是常数。*
 
 ## 3. Correctness Proof
 
