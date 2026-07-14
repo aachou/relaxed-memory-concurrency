@@ -463,7 +463,7 @@ fn unlock(&self, token: Token) {
 }
 ```
 
-基于链表实现的无锁公平锁。每个线程创建一个新节点，通过 `swap(AcqRel)` 获取前驱节点，然后轮询前驱节点释放。AcqRel 同时提供 acquire 和 release 语义，保证消息传递。
+基于链表实现的无锁公平锁。每个线程创建一个新节点，通过 `swap(AcqRel)` 获取前驱节点，然后轮询前驱节点是否释放。同样通过 Release/Acquire 传递最新数据。
 
 **三种锁的共同点**：持有锁的时间戳区间不相交，通过 Release/Acquire 实现消息传递，保证持有锁时能访问到最新数据。
 

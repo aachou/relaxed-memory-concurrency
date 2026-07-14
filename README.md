@@ -103,7 +103,7 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 |----|------|--------|---------|
 | **SpinLock** | `CAS(false→true, Acquire)` | `store(false, Release)` | CAS 利用 Message Adjacency；Acquire/Release 实现 View 合并 |
 | **TicketLock** | `fetch_add(1, Relaxed)` → `load(Acquire) 自旋` | `store(Release)` | 公平排队，Release/Acquire 保证临界区数据可见 |
-| **CLHLock** | `swap(node, AcqRel)` → `load(Acquire) 自旋` | `store(false, Release)` | 链式队锁，AcqRel 提供双向 View 合并 |
+| **CLHLock** | `swap(node, AcqRel)` → `load(Acquire) 自旋` | `store(false, Release)` | 链式队锁，Release/Acquire 实现消息传递 |
 
 每个锁两个测试：
 
@@ -122,7 +122,7 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 cargo promises
 ```
 
-运行所有 28 个测试，Loom 会穷举所有线程交错，验证断言在所有调度下均成立。
+运行所有 28 个测试，Loom 会穷举所有线程交错和重排序，验证断言在所有调度下均成立。
 
 ## Reference
 
