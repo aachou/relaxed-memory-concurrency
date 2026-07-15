@@ -96,4 +96,8 @@ pop():
 
 线性一致性（Linearizability）是 Herlihy & Wing 提出的并发对象正确性条件。它要求**每个操作在其调用之后、返回之前的某个瞬间点原子地完成（这个点称为线性化点），所有非并发操作的先后顺序必须保留**。判断一个并发执行是否正确，就是给每个操作找线性化点并排序，看结果是否符合数据类型本身的顺序规约。
 
-这篇论文是并发理论的基石，奠定了并发对象正确性的标准。
+[这篇论文](https://cs.brown.edu/people/mph/HerlihyW90/p463-herlihy.pdf)是并发理论的基石，奠定了并发对象正确性的标准。
+
+## 参考
+
+[Linearizability: A Correctness Condition for Concurrent Objects](https://cs.brown.edu/people/mph/HerlihyW90/p463-herlihy.pdf)
