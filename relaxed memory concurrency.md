@@ -472,7 +472,7 @@ fn unlock(&self, token: Token) {
 - [A Promising Semantics for Relaxed-Memory Concurrency](https://sf.snu.ac.kr/promise-concurrency/)
 - [KAIST CS431: Concurrent Programming](https://github.com/kaist-cp/cs431)
 
-* [How to Make a Multiprocessor Computer That Correctly Executes Multiprocess Programs](https://lamport.azurewebsites.net/pubs/lamport-how-to-make.pdf)
+* [How to Make a Multiprocessor Computer That Correctly Executes Multiprocess Programs](https://lamport.azurewebsites.net/pubs/multi.pdf)
 - [Shared Memory Consistency Models: A Tutorial](https://pages.cs.wisc.edu/~markhill/upc/restricted/consistency_tutorial_tr.pdf)
 - [Linearizability: A Correctness Condition for Concurrent Objects](https://cs.brown.edu/people/mph/HerlihyW90/p463-herlihy.pdf)
 
