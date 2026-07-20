@@ -1,25 +1,6 @@
 # Relaxed Memory Concurrency
 
-> 使用 [Loom](https://github.com/tokio-rs/loom) 对 **Promising Semantics** 建模的 Relaxed Behaviors & Orderings 及三种互斥锁进行测试。关于 Promising Semantics 可参考：[Relaxed Memory Concurrency](./relaxed%20memory%20concurrency.md)。
-
-## Structure
-
-```
-src/
-├── lib.rs              # 模块声明
-├── spin_lock.rs        # SpinLock — CAS + Acquire/Release
-├── ticket_lock.rs      # TicketLock — fetch_add + Acquire/Release
-├── clh_lock.rs         # CLHLock — swap(AcqRel) + 链表队锁
-└── ebr.rs              # Epoch-Based Reclamation（Fraser epoch）
-
-tests/
-├── multi_valued_memory.rs    # ① Load Hoisting
-├── message_adjacency.rs      # ② RMW 原子性
-├── views.rs                  # ③ Coherence + Synchronization
-├── promises.rs               # ④ Store Hoisting
-├── ebr_tests.rs              #   Epoch-Based Reclamation
-└── lock_tests.rs             #   SpinLock / TicketLock / CLHLock
-```
+> 使用 [Loom](https://github.com/tokio-rs/loom) 对 Relaxed Behaviors & Orderings 进行测试。
 
 ## Relaxed Behaviors & Orderings Test
 
@@ -33,7 +14,7 @@ X = 1;   r1 = Y;     ||     Y = 1;   r2 = X;
 
 | 测试 | 验证 | 预期 |
 |------|------|------|
-| `test_load_hoisting` | Relaxed 下 load 可读到旧值 | `r1=r2=0` **可达**（witness 断言） |
+| `test_load_hoisting` | Relaxed 下 load 可读到旧值 | 允许 `r1=r2=0` |
 
 ### ② Message Adjacency — RMW Atomicity
 
@@ -70,32 +51,10 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 
 | 测试 | 场景 | C++11 | Loom | PS |
 |------|------|-------|------|----|
-| `test_store_hoisting_wo_dep` | 无依赖 | 允许 | 不支持 | **可达** |
-| `test_store_hoisting_w_dep_oota` | 数据依赖 (OOTA) | 允许（已知缺陷） | 不可达 | **不可达** |
-| `test_store_hoisting_syntactic_dep` | 语法依赖 | 允许 | 不支持 | **可达** |
-| `test_store_hoisting_syntactic_dep_rw_coherence` | 语法依赖 + RW coherence | `r1=r2=1` 允许，`r3=0`（故三者同时为 1 不可达） | 不可达 | **不可达** |
-
-## EBR GC — Epoch-Based Reclamation
-
-基于 Fraser epoch 算法、遵循 crossbeam-relaxed-memory RFC 内存顺序的 EBR 垃圾回收器。
-
-| 关键操作 | 内存顺序 |
-|---------|---------|
-| `pin()` | `load(Relaxed)` → `store(Relaxed)` → `fence(SeqCst)` |
-| `unpin()` | `store(SENTINEL, Release)` |
-| `retire()` | `fence(SeqCst)` → `load(Relaxed)` → 入 `retire_lists[epoch]` |
-| `try_advance()` | `load(Relaxed)` → `fence(SeqCst)` → 检查所有线程 → `fence(Acquire)` → `store(Release)` |
-
-| 测试 | 验证 |
-|------|------|
-| `test_basic_reclamation` | 单线程 retire + 两次 epoch 推进后 obj 被释放 |
-| `test_full_epoch_rotation` | 三个 epoch 轮转，每个 epoch retire 的对象两次推进后释放 |
-| `test_multiple_retires_same_epoch` | 同一 epoch retire 多个 obj 同时释放 |
-| `test_repeated_pin` | 重复 pin/unpin 不影响正确性 |
-| `test_rfc_case1_retire_before_pin` | RFC Case 1: unlink 的 SC fence < pin 的 SC fence |
-| `test_rfc_case2_pin_before_retire` | RFC Case 2: pin 的 SC fence < unlink 的 SC fence |
-| `test_pinned_thread_blocks_advance` | 线程 pin 在旧 epoch 时阻塞 `try_advance`（外部 witness 验证） |
-| `test_concurrent_safety_fuzz` | 并发安全：pin 住期间 obj 不会被释放（外部 witness 验证） |
+| `test_store_hoisting_wo_dep` | 无依赖 | 允许 | 不支持 | 允许 |
+| `test_store_hoisting_w_dep_oota` | 数据依赖 (OOTA) | 允许（已知缺陷） | 不支持 | 不允许 |
+| `test_store_hoisting_syntactic_dep` | 语法依赖 | 允许 | 不支持 | 允许 |
+| `test_store_hoisting_syntactic_dep_rw_coherence` | 语法依赖 + RW coherence | `r1=r2=1` 允许，`r3=0`（故不允许三者同时为 1） | 不支持 | 不允许 |
 
 ## Mutex Lock
 
@@ -122,7 +81,7 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 cargo promises
 ```
 
-运行所有 28 个测试，Loom 会穷举所有线程交错和重排序，验证断言在所有调度下均成立。
+运行所有测试，Loom 会穷举所有线程交错和重排序，验证断言在所有调度下均成立。
 
 ## Reference
 
