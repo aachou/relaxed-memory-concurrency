@@ -1,2 +1,2 @@
 [alias]
-promises = "test --tests -- --test-threads=1 --nocapture"
+loom-test = "test --features check-loom --release"

@@ -1,6 +1,6 @@
 # Relaxed Memory Concurrency
 
-> 使用 [Loom](https://github.com/tokio-rs/loom) 对 Relaxed Behaviors & Orderings 进行测试。
+> 使用 [Loom](https://github.com/tokio-rs/loom) 对 Relaxed Behaviors & Orderings 以及一些无锁数据结构进行测试。
 
 ## Relaxed Behaviors & Orderings Test
 
@@ -56,24 +56,6 @@ Store hoisting (`r1=X;Y=r1 || r2=Y;X=1 → r1=r2=1`) 在 C++11 内存模型下**
 | `test_store_hoisting_syntactic_dep` | 语法依赖 | 允许 | 不支持 | 允许 |
 | `test_store_hoisting_syntactic_dep_rw_coherence` | 语法依赖 + RW coherence | `r1=r2=1` 允许，`r3=0`（故不允许三者同时为 1） | 不支持 | 不允许 |
 
-## Mutex Lock
-
-| 锁 | lock | unlock | 关键语义 |
-|----|------|--------|---------|
-| **SpinLock** | `CAS(false→true, Acquire)` | `store(false, Release)` | CAS 利用 Message Adjacency；Acquire/Release 实现 View 合并 |
-| **TicketLock** | `fetch_add(1, Relaxed)` → `load(Acquire) 自旋` | `store(Release)` | 公平排队，Release/Acquire 保证临界区数据可见 |
-| **CLHLock** | `swap(node, AcqRel)` → `load(Acquire) 自旋` | `store(false, Release)` | 链式队锁，Release/Acquire 实现消息传递 |
-
-每个锁两个测试：
-
-| 测试 | 验证 |
-|------|------|
-| `spin_lock::mutual_exclusion` | 两线程各递增计数器，最终值 = 2 |
-| `spin_lock::message_passing` | 线程1 写 data=42 → unlock → 线程2 lock → 读到 42 |
-| `ticket_lock::mutual_exclusion` | 同上 |
-| `ticket_lock::message_passing` | 同上 |
-| `clh_lock::mutual_exclusion` | 同上 |
-| `clh_lock::message_passing` | 同上 |
 
 ## Run
 
@@ -88,4 +70,3 @@ cargo promises
 - [Promising Semantics](https://sf.snu.ac.kr/promise-concurrency/)
 - [Loom](https://github.com/tokio-rs/loom)
 - [KAIST CS431: Concurrent Programming](https://github.com/kaist-cp/cs431)
-- [crossbeam-relaxed-memory RFC](./docs/crossbeam-relaxed-memory.md)

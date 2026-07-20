@@ -1,17 +1,17 @@
 //! # Views — Coherence & Synchronization
 //!
-//! **View** is a mapping from location to timestamp, modelling a thread's
-//! confirmed state of messages.  Three kinds of view constrain behaviour:
+//! View 是 location 到 timestamp 的映射，表示线程对 message 的确认状态。有三种 view：
 //!
 //! | View | 机制 | 作用 |
 //! |------|------|------|
-//! | **Per-thread view** | 读写操作更新当前线程的 view | 保证 per-location coherence（RR/RW/WR/WW）|
-//! | **Per-message view** | Release 写生成 message view；Acquire 读合并 message view | 实现 Release/Acquire 同步 |
-//! | **Global view** | `fence(SC)` 同步 thread view 与 global view | 实现 SC fence 跨线程同步 |
+//! | **Per-thread view** | 表示线程对 message 的确认，读写操作更新当前线程的 view | 保证 per-location coherence（RR/RW/WR/WW）|
+//! | **Per-message view** | Release store 生成 message view；Acquire load 合并 message view | 实现 Release/Acquire 同步 |
+//! | **Global view** | fence(SC) 同步 thread view 与 global view | 实现 SC fence 跨线程同步 |
 
-use loom::sync::atomic::{AtomicUsize, Ordering, fence};
-use loom::sync::Arc;
-use loom::thread;
+use relaxed_memory_concurrency::test::loom;
+use relaxed_memory_concurrency::test::loom::sync::Arc;
+use relaxed_memory_concurrency::test::loom::sync::atomic::{AtomicUsize, Ordering, fence};
+use relaxed_memory_concurrency::test::loom::thread;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 //  Per-thread View → Coherence
@@ -20,35 +20,25 @@ use loom::thread;
 /// **RR coherence**：两次读同一位置，前一次读到新值，后一次不能读到旧值。
 ///
 /// 对应文档：`X=1 || r1=X; r2=X [r1=1, r2=0 impossible]`
-///
-/// 若线程2 第一次读到 X=1（来自线程1 的写入），其 per-thread view 已更新到
-/// X 的最新 timestamp，第二次读不可能回退到 X=0。
 #[test]
-fn test_rr_coherence() {
+fn rr_coherence() {
     loom::model(|| {
         let x = Arc::new(AtomicUsize::new(0));
-        let r1 = Arc::new(AtomicUsize::new(0));
-        let r2 = Arc::new(AtomicUsize::new(0));
 
-        let x1 = x.clone();
+        let x_ = Arc::clone(&x);
         let t1 = thread::spawn(move || {
-            x1.store(1, Ordering::Relaxed);
+            x_.store(1, Ordering::Relaxed);
         });
 
-        let x2 = x.clone();
-        let r1c = r1.clone();
-        let r2c = r2.clone();
+        let x_ = Arc::clone(&x);
         let t2 = thread::spawn(move || {
-            r1c.store(x2.load(Ordering::Relaxed), Ordering::Relaxed);
-            r2c.store(x2.load(Ordering::Relaxed), Ordering::Relaxed);
+            if x_.load(Ordering::Relaxed) == 1 {
+                assert_eq!(x_.load(Ordering::Relaxed), 1);
+            }
         });
 
         t1.join().unwrap();
         t2.join().unwrap();
-
-        let v1 = r1.load(Ordering::Relaxed);
-        let v2 = r2.load(Ordering::Relaxed);
-        assert!(v1 != 1 || v2 == 1, "RR coherence: if first read sees 1, second must also see 1");
     });
 }
 
@@ -58,63 +48,53 @@ fn test_rr_coherence() {
 ///
 /// 先读 X 得到 0（初始值），再写 X=1。读到的值不受后续写的影响。
 #[test]
-fn test_rw_coherence() {
+fn rw_coherence() {
     loom::model(|| {
         let x = Arc::new(AtomicUsize::new(0));
-        let r = Arc::new(AtomicUsize::new(0));
 
-        let x1 = x.clone();
-        let rc = r.clone();
-        let t = thread::spawn(move || {
-            rc.store(x1.load(Ordering::Relaxed), Ordering::Relaxed);
-            x1.store(1, Ordering::Relaxed);
-        });
-
-        t.join().unwrap();
-
-        assert_eq!(r.load(Ordering::Relaxed), 0, "RW coherence: read sees value before the write");
+        thread::spawn(move || {
+            assert_eq!(x.load(Ordering::Relaxed), 0);
+            x.store(1, Ordering::Relaxed);
+        })
+        .join()
+        .unwrap();
     });
 }
 
 /// **WR coherence**：写后读，读到的值一定是刚写的。
 ///
 /// 对应文档：`X=1; r=X [r=1]`
-///
-/// 写入 X=1 后立即读同一个位置，per-thread view 保证了读到刚写入的值。
 #[test]
-fn test_wr_coherence() {
+fn wr_coherence() {
     loom::model(|| {
         let x = Arc::new(AtomicUsize::new(0));
 
-        let x1 = x.clone();
-        let t = thread::spawn(move || {
-            x1.store(1, Ordering::Relaxed);
-            assert_eq!(x1.load(Ordering::Relaxed), 1, "WR coherence: write then read sees the written value");
-        });
-
-        t.join().unwrap();
+        thread::spawn(move || {
+            x.store(1, Ordering::Relaxed);
+            assert_eq!(x.load(Ordering::Relaxed), 1);
+        })
+        .join()
+        .unwrap();
     });
 }
 
 /// **WW coherence**：写后写，最终结果一定是最后一个写。
 ///
 /// 对应文档：`X=1; X=2 [X=2 at the end]`
-///
-/// 连续写入 X=1 和 X=2，per-thread view 保证最终 X=2（最后一次写入）。
 #[test]
-fn test_ww_coherence() {
+fn ww_coherence() {
     loom::model(|| {
         let x = Arc::new(AtomicUsize::new(0));
 
-        let x1 = x.clone();
-        let t = thread::spawn(move || {
-            x1.store(1, Ordering::Relaxed);
-            x1.store(2, Ordering::Relaxed);
-        });
+        let x_ = Arc::clone(&x);
+        thread::spawn(move || {
+            x_.store(1, Ordering::Relaxed);
+            x_.store(2, Ordering::Relaxed);
+        })
+        .join()
+        .unwrap();
 
-        t.join().unwrap();
-
-        assert_eq!(x.load(Ordering::Relaxed), 2, "WW coherence: final value is the last store");
+        assert_eq!(x.load(Ordering::Relaxed), 2);
     });
 }
 
@@ -122,8 +102,8 @@ fn test_ww_coherence() {
 //  Per-message View → Release/Acquire Synchronization
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// **Release/Acquire 同步**：Release 写会生成一个 message view（记录 release
-/// 时刻线程的完整视图）；Acquire 读将该 message view 合并到当前线程的 view 中。
+/// **Release/Acquire 同步**：Release store 会生成一个 message view（记录 release
+/// 时刻线程的完整视图）；Acquire load 将该 message view 合并到当前线程的 view 中。
 ///
 /// 对应文档：
 /// ```rust
@@ -131,25 +111,23 @@ fn test_ww_coherence() {
 /// Y.store(1, release);          ||       assert!(X == 1);  // 一定成功
 /// ```
 ///
-/// 如果线程2 看到 Y=1（Acquire），则此前线程1 对 X=1 的写入必然也可见。
+/// 如果线程 2 看到 Y=1（Acquire），则此前线程 1 对 X=1 的写入也必然可见。
 #[test]
-fn test_release_acquire_sync() {
+fn release_acquire_sync() {
     loom::model(|| {
-        let data = Arc::new(AtomicUsize::new(0));
-        let flag = Arc::new(AtomicUsize::new(0));
+        let x = Arc::new(AtomicUsize::new(0));
+        let y = Arc::new(AtomicUsize::new(0));
 
-        let d1 = data.clone();
-        let f1 = flag.clone();
+        let (x_, y_) = (Arc::clone(&x), Arc::clone(&y));
         let t1 = thread::spawn(move || {
-            d1.store(1, Ordering::Relaxed);
-            f1.store(1, Ordering::Release);
+            x_.store(1, Ordering::Relaxed);
+            y_.store(1, Ordering::Release);
         });
 
-        let d2 = data.clone();
-        let f2 = flag.clone();
+        let (x_, y_) = (Arc::clone(&x), Arc::clone(&y));
         let t2 = thread::spawn(move || {
-            if f2.load(Ordering::Acquire) == 1 {
-                assert_eq!(d2.load(Ordering::Relaxed), 1, "per-message view: Acquire sees data from prior Release");
+            if y_.load(Ordering::Acquire) == 1 {
+                assert_eq!(x_.load(Ordering::Relaxed), 1);
             }
         });
 
@@ -172,26 +150,26 @@ fn test_release_acquire_sync() {
 /// Y.store(1, relaxed);||       assert!(X == 1);
 ///                     ||   }
 /// ```
+///
+/// 如果线程 2 看到 Y=1（relaxed），则此前线程 1 对 X=1 的写入也必然可见
 #[test]
-fn test_sc_fence_sync() {
+fn sc_fence_sync() {
     loom::model(|| {
-        let data = Arc::new(AtomicUsize::new(0));
-        let flag = Arc::new(AtomicUsize::new(0));
+        let x = Arc::new(AtomicUsize::new(0));
+        let y = Arc::new(AtomicUsize::new(0));
 
-        let d1 = data.clone();
-        let f1 = flag.clone();
+        let (x_, y_) = (Arc::clone(&x), Arc::clone(&y));
         let t1 = thread::spawn(move || {
-            d1.store(1, Ordering::Relaxed);
+            x_.store(1, Ordering::Relaxed);
             fence(Ordering::SeqCst);
-            f1.store(1, Ordering::Relaxed);
+            y_.store(1, Ordering::Relaxed);
         });
 
-        let d2 = data.clone();
-        let f2 = flag.clone();
+        let (x_, y_) = (Arc::clone(&x), Arc::clone(&y));
         let t2 = thread::spawn(move || {
-            if f2.load(Ordering::Relaxed) == 1 {
+            if y_.load(Ordering::Relaxed) == 1 {
                 fence(Ordering::SeqCst);
-                assert_eq!(d2.load(Ordering::Relaxed), 1, "global view: SC fence synchronises data across threads");
+                assert_eq!(x_.load(Ordering::Relaxed), 1);
             }
         });
 
@@ -206,44 +184,33 @@ fn test_sc_fence_sync() {
 
 /// 对照测试：全部使用 `Relaxed`，不做任何同步。
 ///
-/// 线程2 看到 flag=1 后读 data，此时 data 的值可能是 0（旧值）也可能是 1。
-/// 因为没有 Release/Acquire 或 SC fence，per-message view 和 global view
-/// 都不会被更新，所以不存在 happens-before 关系——读旧值是合法行为。
+/// ```rust
+/// X = 1;                        ||   if Y.load() == 1:
+/// Y.store(1);                   ||       assert!(X == 1);  
+/// ```
 ///
-/// 使用 witness 验证 `val == 0`（读到旧值）是可达的。
+/// 线程 2 看到 Y=1 后读 X，此时 X 的值可能是 0（旧值）也可能是 1，因此断言可能会失败。
 #[test]
-fn test_relaxed_no_sync() {
-    let reached = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let r = reached.clone();
+#[should_panic]
+fn relaxed_no_sync() {
+    loom::model(|| {
+        let x = Arc::new(AtomicUsize::new(0));
+        let y = Arc::new(AtomicUsize::new(0));
 
-    loom::model(move || {
-        let data = Arc::new(AtomicUsize::new(0));
-        let flag = Arc::new(AtomicUsize::new(0));
-
-        let d1 = data.clone();
-        let f1 = flag.clone();
+        let (x_, y_) = (Arc::clone(&x), Arc::clone(&y));
         let t1 = thread::spawn(move || {
-            d1.store(1, Ordering::Relaxed);
-            f1.store(1, Ordering::Relaxed);
+            x_.store(1, Ordering::Relaxed);
+            y_.store(1, Ordering::Relaxed);
         });
 
-        let d2 = data.clone();
-        let f2 = flag.clone();
-        let r2 = r.clone();
+        let (x_, y_) = (Arc::clone(&x), Arc::clone(&y));
         let t2 = thread::spawn(move || {
-            if f2.load(Ordering::Relaxed) == 1 {
-                if d2.load(Ordering::Relaxed) == 0 {
-                    r2.store(true, std::sync::atomic::Ordering::SeqCst);
-                }
+            if y_.load(Ordering::Relaxed) == 1 {
+                assert_eq!(x_.load(Ordering::Relaxed), 1);
             }
         });
 
         t1.join().unwrap();
         t2.join().unwrap();
     });
-
-    assert!(
-        reached.load(std::sync::atomic::Ordering::SeqCst),
-        "val=0 must be reachable under Relaxed (no synchronization)"
-    );
 }
