@@ -14,18 +14,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - run: cargo check --workspace
+      - run: cargo check
 
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - run: cargo build --workspace --verbose
+      - run: cargo build
+      - run: cargo build --release
 
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - run: cargo test & cargo test --release & cargo loom-test
+      - run: cargo test
+      - run: cargo test --release
+      - run: cargo loom-test
