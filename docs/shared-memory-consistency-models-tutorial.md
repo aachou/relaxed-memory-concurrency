@@ -401,8 +401,6 @@ Figure 7 summarizes the relaxations discussed above. Relaxed models also typical
 
 图 7 总结了上述各种放宽。宽松模型通常还会为程序员提供机制来覆盖这些放宽。例如，可以用显式的栅障（fence）指令来恢复程序顺序约束。我们将这类机制统称为模型的安全网（safety net），并会在下文介绍每种模型提供了哪些安全网。每个模型可能还提供了更精细的方式来强制执行特定的顺序约束，为简单起见，我们只讨论其中比较直接的安全网。
 
-> 覆盖放宽？指约束放款吗？
-
 ![图 7：内存模型允许的放宽。前三种（程序顺序）放宽仅适用于访问不同位置的操作对。](../static/images/shared-memory-consistency-models-tutorial/fig7.png)
 
 Figure 8 provides an overview of the models described in the remaining part of this section. The figure shows whether a straightforward implementation of the model can efficiently exploit the program order or write atomicity relaxations described above, and mentions the safety nets provided by each model. The figure also indicates when the above relaxations are detectable by the programmer; i.e., when they can affect the results of the program. Figure 9 gives examples of commercial systems that allow the above relaxations. For simplicity, we do not attempt to describe the semantics of the models with respect to issues such as instruction fetches or multiple granularity operations (e.g., byte and word operations) even though such semantics are defined by some of these models.
